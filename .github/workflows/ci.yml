@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - "main"
+  pull_request:
+    branches:
+      - "main"
 
 jobs:
   docker:
@@ -25,3 +28,77 @@ jobs:
         with:
           tags: "${{ vars.DOCKER_USER }}/docker-build-cloud-demo:latest"
           outputs: ${{ github.event_name == 'pull_request' && 'type=cacheonly' || 'type=registry' }}
+
+  python-agent:
+    name: Validate Python agent
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python-version: ['3.11']
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: 'pip'
+          cache-dependency-path: 'requirements.txt'
+
+      - name: Create venv and install (Unix)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          python -m venv .venv
+          source .venv/bin/activate
+          python -V
+          pip install -r requirements.txt
+
+      - name: Create venv and install (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          python -m venv .venv
+          .venv\Scripts\Activate.ps1
+          python -V
+          pip install -r requirements.txt
+
+      - name: Validate agent config exists (Unix)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          test -f ".venv/agent-config.json" || (echo "Missing .venv/agent-config.json" && exit 1)
+          test -f ".env.example" || (echo "Missing .env.example" && exit 1)
+
+      - name: Validate agent config exists (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          if (!(Test-Path ".venv/agent-config.json")) { Write-Error "Missing .venv/agent-config.json"; exit 1 }
+          if (!(Test-Path ".env.example")) { Write-Error "Missing .env.example"; exit 1 }
+
+      - name: Import packages check (Unix)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          source .venv/bin/activate
+          python - <<'PY'
+          import requests, dotenv, json, pathlib
+          print('imports OK: requests', requests.__version__)
+          print('imports OK: dotenv', dotenv.__version__ if hasattr(dotenv, '__version__') else 'loaded')
+          print('agent config size', pathlib.Path('.venv/agent-config.json').stat().st_size)
+          PY
+
+      - name: Import packages check (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          .venv\Scripts\Activate.ps1
+          python - <<'PY'
+          import requests, dotenv, json, pathlib
+          print('imports OK: requests', requests.__version__)
+          print('imports OK: dotenv', getattr(dotenv, '__version__', 'loaded'))
+          print('agent config size', pathlib.Path('.venv/agent-config.json').stat().st_size)
+          PY
