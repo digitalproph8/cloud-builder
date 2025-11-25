@@ -1,0 +1,14 @@
+{
+  "agent_name": "python-agent",
+  "enabled": true,
+  "python_version": "3.11",
+  "venv_path": ".venv",
+  "requirements_file": "requirements.txt",
+  "env_file": ".env",
+  "entrypoint": "python -m fastagent.main",
+  "packages": [
+    "requests",
+    "python-dotenv"
+  ],
+  "notes": "This file documents the Python agent environment expected to live under .venv. Dependencies are declared in requirements.txt at repo root; do not commit actual .venv binaries."
+}
